@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import asyncio
 from typing import Optional
-import json
 from datetime import datetime
 import random
 
@@ -12,7 +11,7 @@ app = FastAPI()
 # CORS middleware for Next.js frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["*"],  # Allow all origins - update with your frontend domain for production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -203,7 +202,7 @@ async def follow_process():
         
         async with async_playwright() as p:
             # Launch browser with realistic settings
-            browser = await p.chromium.launch(headless=False)
+            browser = await p.chromium.launch(headless=True)
             context = await browser.new_context(
                 viewport={'width': 520, 'height': 844}  # iPhone size
             )
