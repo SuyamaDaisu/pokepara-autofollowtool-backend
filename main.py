@@ -1,3 +1,5 @@
+from math import fabs
+from operator import truediv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -201,10 +203,18 @@ async def follow_process():
         from playwright.async_api import async_playwright
         
         async with async_playwright() as p:
-            # Launch browser with realistic settings
-            browser = await p.chromium.launch(headless=True)
+            # Launch browser with realistic settings to avoid detection
+            browser = await p.chromium.launch(
+                headless=True,
+                args=[
+                    '--disable-blink-features=AutomationControlled',
+                    '--disable-dev-shm-usage',
+                    '--no-sandbox'
+                ]
+            )
             context = await browser.new_context(
-                viewport={'width': 520, 'height': 844}  # iPhone size
+                viewport={'width': 520, 'height': 844},  # iPhone size
+                user_agent='Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1'
             )
             page = await context.new_page()
             
@@ -213,11 +223,11 @@ async def follow_process():
             await page.goto('https://sp.pokepara.jp/kanto/login/login_gal.aspx?back_url=%2fgal_manage%2findex.aspx', timeout=60000)
             
             print("Waiting for login form...")
-            await page.wait_for_selector('input[name="login_id"]', state='visible', timeout=60000)
+            await page.wait_for_selector('input[name="login_id"]', timeout=60000)
             await page.fill('input[name="login_id"]', 'tnjq-21755')
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(1)
             await page.fill('input[name="pass"]', '6756')
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(1)
             await page.click('input[type="submit"]')
             # await page.goto('https://sp.pokepara.jp/gal_manage/favorite/gal.html', timeout=60000)
             await page.goto('https://sp.pokepara.jp/gal_manage/favorite/gal.html?', timeout=60000)
@@ -228,7 +238,7 @@ async def follow_process():
                     print(f"Progress: {state.current_count}/{state.target_count}")
                     # Get all blog_box divs
                     print("Finding all blog_box elements...")
-                    await page.wait_for_selector('.blog_box', state='visible', timeout=10000)
+                    await page.wait_for_selector('.blog_box', timeout=10000)
                     blog_boxes = await page.query_selector_all('.blog_box')
                     cnt = len(blog_boxes)
                     print("Found", cnt, "blog_box elements")
@@ -250,8 +260,15 @@ async def follow_process():
                                     link_url = await link.get_attribute('href')
                                     new_page = await context.new_page()
                                     await new_page.goto(link_url, timeout=60000)
+                                    # Wait for the page to be fully loaded
+                                    await new_page.wait_for_load_state('networkidle', timeout=30000)
+                                    # Wait for button to be attached and visible
                                     await new_page.wait_for_selector("a.bt_iine", state='visible', timeout=60000)
-                                    await new_page.click("a.bt_iine")
+                                    # Additional wait to ensure button is clickable
+                                    await asyncio.sleep(1)
+                                    # Click with force option and wait for navigation if needed
+                                    await new_page.click("a.bt_iine", timeout=10000)
+                                    # Wait after clicking
                                     await asyncio.sleep(random.uniform(3, 5))
                                     await new_page.close()
                                     # Broadcast update to frontend after each successful follow
@@ -272,9 +289,10 @@ async def follow_process():
                         await broadcast_no_more_users()
                         break
                     
-                    # Click next page button
-                    await page.click('a:has-text("→")')
-                    await asyncio.sleep(random.uniform(2, 4))
+                    # Click next page button with proper waiting
+                    await page.wait_for_load_state('networkidle', timeout=10000)
+                    await page.click('a:has-text("→")', timeout=10000)
+                    await asyncio.sleep(random.uniform(3, 5))
                 except Exception as e:
                     print(f"Error during follow action: {e}")
                     # If error occurs, try to check if we can continue
@@ -309,4 +327,3 @@ async def follow_process():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
